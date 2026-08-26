@@ -1,14 +1,9 @@
 name: CI
+# Build a preview APK and upload it as a workflow artifact (no release)
+# The Preview Builder workflow handles release creation on push to main,
+# so this one is manual-only to avoid duplicate builds.
+
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '**'
-      - '!**.md'
-  # pull_request:
-  #   paths-ignore:
-  #     - '**.md'
   # Dispatch or Manual triggers
   workflow_dispatch:
 
