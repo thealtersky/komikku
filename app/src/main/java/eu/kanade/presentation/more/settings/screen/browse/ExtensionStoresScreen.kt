@@ -11,6 +11,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.screen.browse.components.ExtensionStoreConfirmDialog
 import eu.kanade.presentation.more.settings.screen.browse.components.ExtensionStoreCreateDialog
 import eu.kanade.presentation.more.settings.screen.browse.components.ExtensionStoreDeleteDialog
+import eu.kanade.presentation.more.settings.screen.browse.components.ExtensionStoreTokenDialog
 import eu.kanade.presentation.more.settings.screen.browse.components.ExtensionStoresScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
@@ -62,6 +63,9 @@ class ExtensionStoresScreen(
             // KMK <--
             onClickDelete = { screenModel.showDialog(ExtensionStoreDialog.Delete(it)) },
             onClickRefresh = { screenModel.refreshRepos() },
+            // KMK -->
+            onClickSetToken = { screenModel.showDialog(ExtensionStoreDialog.SetToken) },
+            // KMK <--
             navigateUp = navigator::pop,
         )
 
@@ -94,6 +98,15 @@ class ExtensionStoresScreen(
                     errorMessage = dialog.errorMessage,
                 )
             }
+            // KMK -->
+            is ExtensionStoreDialog.SetToken -> {
+                ExtensionStoreTokenDialog(
+                    onDismissRequest = screenModel::dismissDialog,
+                    onSave = { screenModel.onSetToken(it) },
+                    onClear = screenModel::onClearToken,
+                )
+            }
+            // KMK <--
         }
     }
 }

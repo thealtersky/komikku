@@ -5,6 +5,7 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
+import eu.kanade.tachiyomi.network.NetworkPreferences
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -26,6 +27,7 @@ class ExtensionStoresScreenModel(
     private val extensionManager: ExtensionManager = Injekt.get(),
     // KMK -->
     private val sourcePreferences: SourcePreferences = Injekt.get(),
+    private val networkPreferences: NetworkPreferences = Injekt.get(),
     // KMK <--
 ) : StateScreenModel<ExtensionStoreScreenState>(ExtensionStoreScreenState.Loading) {
 
@@ -50,6 +52,7 @@ class ExtensionStoresScreenModel(
                                 stores = stores,
                                 // KMK -->
                                 disabledRepos = sourcePreferences.disabledRepos().get(),
+                                githubTokenSet = networkPreferences.extensionStoreToken().get().isNotEmpty(),
                                 // KMK <--
                             )
                             is ExtensionStoreScreenState.Success -> it.copy(stores = stores)
@@ -166,6 +169,25 @@ class ExtensionStoresScreenModel(
             extensionManager.findAvailableExtensions()
         }
     }
+
+    /**
+     * Stores the GitHub token used to access private extension repositories.
+     */
+    fun onSetToken(token: String) {
+        val cleanToken = token.trim()
+        networkPreferences.extensionStoreToken().set(cleanToken)
+        updateSuccessState { state -> state.copy(githubTokenSet = cleanToken.isNotEmpty()) }
+        dismissDialog()
+    }
+
+    /**
+     * Clears the GitHub token used to access private extension repositories.
+     */
+    fun onClearToken() {
+        networkPreferences.extensionStoreToken().set("")
+        updateSuccessState { state -> state.copy(githubTokenSet = false) }
+        dismissDialog()
+    }
     // KMK <--
 
     fun addFromDeeplink(storeIndexUrl: String) {
@@ -201,6 +223,9 @@ sealed class ExtensionStoreDialog {
         val processing: Boolean = false,
         val errorMessage: String? = null,
     ) : ExtensionStoreDialog()
+    // KMK -->
+    data object SetToken : ExtensionStoreDialog()
+    // KMK <--
 }
 
 sealed class ExtensionStoreScreenState {
@@ -214,6 +239,7 @@ sealed class ExtensionStoreScreenState {
         val dialog: ExtensionStoreDialog? = null,
         // KMK -->
         val disabledRepos: Set<String> = emptySet(),
+        val githubTokenSet: Boolean = false,
         // KMK <--
     ) : ExtensionStoreScreenState() {
 

@@ -29,6 +29,7 @@ class GetApplicationRelease(
         val releases = service.releaseNotes(arguments)
             .filter {
                 !it.preRelease &&
+                    isSameChannel(it.version, arguments.isPreview) &&
                     isNewVersion(
                         arguments.isPreview,
                         arguments.commitCount,
@@ -56,9 +57,19 @@ class GetApplicationRelease(
     }
 
     // KMK -->
+    /**
+     * Both stable (v*) and preview (r*) releases are hosted in the same repository, so only
+     * releases of the current channel are considered: "r<commit count>" for preview builds,
+     * "v<semver>" for stable builds.
+     */
+    private fun isSameChannel(versionTag: String, isPreview: Boolean): Boolean =
+        versionTag.startsWith(if (isPreview) "r" else "v")
+    // KMK <--
+
+    // KMK -->
     suspend fun awaitReleaseNotes(arguments: Arguments): Result {
         val releases = service.releaseNotes(arguments)
-            .filter { !it.preRelease }
+            .filter { !it.preRelease && isSameChannel(it.version, arguments.isPreview) }
 
         val latest = releases.getLatest() ?: return Result.NoNewUpdate
         return Result.NewUpdate(latest)
