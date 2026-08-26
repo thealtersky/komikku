@@ -46,13 +46,15 @@ jobs:
           java-version-file: .github/.java-version
           distribution: temurin
 
-      - name: Write client_secrets.json
-        if: ${{ github.repository == github.event.pull_request.head.repo.full_name && secrets.GOOGLE_CLIENT_SECRETS_JSON != '' }}
-        uses: DamianReeves/write-file-action@6929a9a6d1807689191dcc8bbe62b54d70a32b42 # v1.3
-        with:
-          path: app/src/main/assets/client_secrets.json
-          contents: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
-          write-mode: overwrite
+      - name: Write client_secrets.json (optional)
+        shell: bash
+        env:
+          CLIENT_SECRETS_JSON: ${{ secrets.GOOGLE_CLIENT_SECRETS_JSON }}
+        run: |
+          if [ -n "$CLIENT_SECRETS_JSON" ]; then
+            mkdir -p app/src/main/assets
+            printf '%s' "$CLIENT_SECRETS_JSON" > app/src/main/assets/client_secrets.json
+          fi
 
       - name: Set up gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
