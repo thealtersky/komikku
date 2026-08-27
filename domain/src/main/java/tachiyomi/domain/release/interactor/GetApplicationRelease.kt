@@ -29,7 +29,6 @@ class GetApplicationRelease(
         val releases = service.releaseNotes(arguments)
             .filter {
                 !it.preRelease &&
-                    isSameChannel(it.version, arguments.isPreview) &&
                     isNewVersion(
                         arguments.isPreview,
                         arguments.commitCount,
@@ -58,32 +57,9 @@ class GetApplicationRelease(
 
     // KMK -->
     /**
-     * Both stable (v*) and preview (r*) releases are hosted in the same repository, so only
-     * releases of the current channel are considered: "r<commit count>" for preview builds,
-     * "v<semver>" for stable builds.
-     */
-    private fun isSameChannel(versionTag: String, isPreview: Boolean): Boolean =
-        versionTag.startsWith(if (isPreview) "r" else "v")
-    // KMK <--
-
-    // KMK -->
-    suspend fun awaitReleaseNotes(arguments: Arguments): Result {
-        val releases = service.releaseNotes(arguments)
-            .filter { !it.preRelease && isSameChannel(it.version, arguments.isPreview) }
-
-        val latest = releases.getLatest() ?: return Result.NoNewUpdate
-        return Result.NewUpdate(latest)
-    }
-    // KMK <--
-
-    /**
-     * [isPreview] is if current version is Preview (beta) build
-     *
-     * [versionTag] is the version of new release
-     *
-     * Release (stable) version will compare with current's [versionName] ("v0.1.2")
-     *
-     * Preview (beta) version will compare with current's [commitCount] ("r1234")
+     * Releases are tagged as "v<semver>-r<commit count>" (e.g. "v1.14.1-r7") and contain BOTH
+     * stable and preview assets, so they are considered for both channels. Only the download
+     * link differs per channel (handled in ReleaseServiceImpl).
      */
     private fun isNewVersion(
         isPreview: Boolean,
@@ -91,30 +67,48 @@ class GetApplicationRelease(
         versionName: String,
         versionTag: String,
     ): Boolean {
-        // Removes prefixes like "r" or "v"
-        val newVersion = versionTag.replace("[^\\d.]".toRegex(), "")
+        // Commit count, e.g. "7" from "v1.14.1-r7" (or "2000" from "r2000")
+        val newCommitCount = commitCountRegex.find(versionTag)?.groupValues?.get(1)?.toIntOrNull()
+        // Semantic version, e.g. "1.14.1" from "v1.14.1-r7"
+        val newSemVer = versionTag
+            .removePrefix("v")
+            .removePrefix("r")
+            .substringBefore("-")
+            .split(".")
+            .mapNotNull { it.toIntOrNull() }
+
         return if (isPreview) {
-            // Preview builds: based on releases in "komikku-app/komikku-preview" repo
-            // tagged as something like "r1234"
-            newVersion.toInt() > commitCount
+            // Beta: a newer preview exists when its commit count is higher
+            newCommitCount != null && newCommitCount > commitCount
         } else {
-            // Release builds: based on releases in "komikku-app/komikku" repo
-            // tagged as something like "v0.1.2"
-            val oldVersion = versionName.replace("[^\\d.]".toRegex(), "")
-
-            val newSemVer = newVersion.split(".").map { it.toInt() }
-            val oldSemVer = oldVersion.split(".").map { it.toInt() }
-
-            oldSemVer.mapIndexed { index, i ->
-                if (newSemVer[index] > i) {
-                    return true
-                }
-                if (newSemVer[index] < i) return false
-            }
-
-            false
+            // Stable: bump on a higher semver, or an equal semver with more commits
+            val oldSemVer = versionName.replace("[^\\d.]".toRegex(), "").split(".").mapNotNull { it.toIntOrNull() }
+            val comparison = compareSemVer(newSemVer, oldSemVer)
+            comparison > 0 || (comparison == 0 && newCommitCount != null && newCommitCount > commitCount)
         }
     }
+
+    private fun compareSemVer(newSemVer: List<Int>, oldSemVer: List<Int>): Int {
+        val length = maxOf(newSemVer.size, oldSemVer.size)
+        for (i in 0 until length) {
+            val a = newSemVer.getOrElse(i) { 0 }
+            val b = oldSemVer.getOrElse(i) { 0 }
+            if (a > b) return 1
+            if (a < b) return -1
+        }
+        return 0
+    }
+    // KMK <--
+
+    // KMK -->
+    suspend fun awaitReleaseNotes(arguments: Arguments): Result {
+        val releases = service.releaseNotes(arguments)
+            .filter { !it.preRelease }
+
+        val latest = releases.getLatest() ?: return Result.NoNewUpdate
+        return Result.NewUpdate(latest)
+    }
+    // KMK <--
 
     data class Arguments(
         val isFoss: Boolean,
@@ -134,6 +128,11 @@ class GetApplicationRelease(
         data class NewUpdate(val release: Release) : Result
         data object NoNewUpdate : Result
         data object OsTooOld : Result
+    }
+
+    private companion object {
+        // Matches the commit-count suffix, e.g. "7" in "v1.14.1-r7" or "2000" in "r2000".
+        val commitCountRegex = Regex("r(\\d+)")
     }
 }
 

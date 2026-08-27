@@ -121,6 +121,122 @@ class GetApplicationReleaseTest {
     }
 
     @Test
+    fun `When combined version has higher commit count expect preview new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val releases = listOf(
+            Release(
+                "v1.14.1-r7",
+                "info",
+                "http://example.com/release_link",
+                "http://example.com/release_link.apk",
+            ),
+        )
+
+        coEvery { releaseService.releaseNotes(any()) } returns releases
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isFoss = false,
+                isPreview = true,
+                commitCount = 6,
+                versionName = "1.14.1-6",
+                repository = "test",
+            ),
+        )
+
+        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatest()!!)
+    }
+
+    @Test
+    fun `When combined version has same commit count expect preview no new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val releases = listOf(
+            Release(
+                "v1.14.1-r6",
+                "info",
+                "http://example.com/release_link",
+                "http://example.com/release_link.apk",
+            ),
+        )
+
+        coEvery { releaseService.releaseNotes(any()) } returns releases
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isFoss = false,
+                isPreview = true,
+                commitCount = 6,
+                versionName = "1.14.1-6",
+                repository = "test",
+            ),
+        )
+
+        result shouldBe GetApplicationRelease.Result.NoNewUpdate
+    }
+
+    @Test
+    fun `When combined version has higher semver expect stable new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val releases = listOf(
+            Release(
+                "v1.15.0-r9",
+                "info",
+                "http://example.com/release_link",
+                "http://example.com/release_link.apk",
+            ),
+        )
+
+        coEvery { releaseService.releaseNotes(any()) } returns releases
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isFoss = false,
+                isPreview = false,
+                commitCount = 8,
+                versionName = "1.14.1",
+                repository = "test",
+            ),
+        )
+
+        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatest()!!)
+    }
+
+    @Test
+    fun `When combined version same semver but higher commit count expect stable new update`() = runTest {
+        every { preference.get() } returns 0
+        every { preference.set(any()) }.answers { }
+
+        val releases = listOf(
+            Release(
+                "v1.14.1-r9",
+                "info",
+                "http://example.com/release_link",
+                "http://example.com/release_link.apk",
+            ),
+        )
+
+        coEvery { releaseService.releaseNotes(any()) } returns releases
+
+        val result = getApplicationRelease.await(
+            GetApplicationRelease.Arguments(
+                isFoss = false,
+                isPreview = false,
+                commitCount = 8,
+                versionName = "1.14.1",
+                repository = "test",
+            ),
+        )
+
+        result shouldBe GetApplicationRelease.Result.NewUpdate(releases.getLatest()!!)
+    }
+
+    @Test
     fun `When now is before two days expect no new update`() = runTest {
         every { preference.get() } returns Instant.now().toEpochMilli()
         every { preference.set(any()) }.answers { }

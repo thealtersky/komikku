@@ -1,5 +1,6 @@
-name: Preview Builder
-# Build a preview APK and publish a release on push to main (or manually)
+name: Build & Release
+# Build BOTH the stable (release) and preview (beta) APKs and publish them
+# together in a single GitHub Release on every push to main (or manually).
 
 on:
   push:
@@ -8,7 +9,6 @@ on:
     paths:
       - '**'
       - '!**.md'
-  # Dispatch or Manual triggers
   workflow_dispatch:
 
 concurrency:
@@ -22,23 +22,15 @@ jobs:
   prepare-build:
     runs-on: 'ubuntu-24.04'
     outputs:
-      VERSION_TAG: ${{ steps.get_tag.outputs.VERSION_TAG }}
-      CURRENT_SHA: ${{ steps.current_commit.outputs.CURRENT_SHA }}
-      PREV_RELEASE_SHA: ${{ steps.previous_commit.outputs.PREV_RELEASE_SHA }}
+      VERSION_NAME: ${{ steps.env.outputs.VERSION_NAME }}
+      COMMIT_COUNT: ${{ steps.read_env.outputs.COMMIT_COUNT }}
+      TAG_NAME: ${{ steps.env.outputs.TAG_NAME }}
+      STABLE_VERSION: ${{ steps.env.outputs.STABLE_VERSION }}
+      PREVIEW_VERSION: ${{ steps.env.outputs.PREVIEW_VERSION }}
       COMMIT_LOGS: ${{ steps.commit_logs.outputs.COMMIT_LOGS }}
-      ARTIFACTS_PREFIX: ${{ steps.prepare_env.outputs.ARTIFACTS_PREFIX }}
-      BUILD_TYPE_NAME: ${{ steps.prepare_env.outputs.BUILD_TYPE_NAME }}
-      TAG_NAME: ${{ steps.prepare_env.outputs.TAG_NAME }}
       PREV_TAG_NAME: ${{ steps.previous_commit.outputs.PREV_TAG_NAME }}
     steps:
-      - name: Get tag name (${{ github.ref }})
-        id: get_tag
-        run: |
-          version_tag=$(echo ${GITHUB_REF/refs\/heads\//} | sed -r 's/^refs\/(heads|tags)\///' | sed -r 's/[-\/]+/_/g')
-          echo "VERSION_TAG=$version_tag"
-          echo "VERSION_TAG=$version_tag" >> $GITHUB_OUTPUT
-
-      - name: Clone Repository (${{ steps.get_tag.outputs.VERSION_TAG }})
+      - name: Clone Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
@@ -51,8 +43,8 @@ jobs:
           exclude_types: "draft"
           view_top: 1
 
-      - name: Curren commit
-        id: current_commit
+      - name: Read commit info
+        id: read_env
         run: |
           commit_count=$(git rev-list --count HEAD)
           current_sha=$(git rev-parse --short HEAD)
@@ -65,13 +57,9 @@ jobs:
         id: previous_commit
         run: |
           commit_count_diff=$(git rev-list --count "${{ steps.last_release.outputs.tag_name }}"..HEAD)
-
-          # Fake at least 1 commits (to avoid no changes)
           if [ "${commit_count_diff}" -eq 0 ]; then
             commit_count_diff=1
           fi
-
-          echo "commit_count_diff=$commit_count_diff"
           prev_release_sha=$(git rev-parse --short HEAD~$commit_count_diff)
           echo "PREV_RELEASE_SHA=$prev_release_sha"
           echo "PREV_RELEASE_SHA=$prev_release_sha" >> $GITHUB_OUTPUT
@@ -79,42 +67,44 @@ jobs:
           echo "PREV_TAG_NAME=${{ steps.last_release.outputs.tag_name }}" >> $GITHUB_OUTPUT
 
       - name: Prepare env
-        id: prepare_env
+        id: env
         run: |
-          tag_prefix=r
-          artifacts_prefix=preview/app
-          build_type_name=Preview
+          # Read versionName (e.g. 1.14.1) from app/build.gradle.kts
+          version_name=$(grep -E '^\s*versionName\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"' app/build.gradle.kts | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/' | head -n 1)
+          commit_count=$(git rev-list --count HEAD)
 
-          echo "TAG_NAME=${tag_prefix}${{ steps.current_commit.outputs.COMMIT_COUNT }}"
-          echo "TAG_NAME=${tag_prefix}${{ steps.current_commit.outputs.COMMIT_COUNT }}" >> $GITHUB_OUTPUT
-          echo "ARTIFACTS_PREFIX=$artifacts_prefix"
-          echo "ARTIFACTS_PREFIX=$artifacts_prefix" >> $GITHUB_OUTPUT
-          echo "BUILD_TYPE_NAME=$build_type_name"
-          echo "BUILD_TYPE_NAME=$build_type_name" >> $GITHUB_OUTPUT
-
-      - name: Create Tag '${{ steps.prepare_env.outputs.TAG_NAME }}'
-        if: ${{ github.ref }} == "refs/heads/main"
-        run: |
-          git tag "${{ steps.prepare_env.outputs.TAG_NAME }}"
-          git push origin "${{ steps.prepare_env.outputs.TAG_NAME }}"
-          echo "New tag created: ${{ steps.prepare_env.outputs.TAG_NAME }}"
+          echo "VERSION_NAME=$version_name"
+          echo "VERSION_NAME=$version_name" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=v${version_name}-r${commit_count}"
+          echo "TAG_NAME=v${version_name}-r${commit_count}" >> $GITHUB_OUTPUT
+          echo "STABLE_VERSION=${version_name}"
+          echo "STABLE_VERSION=${version_name}" >> $GITHUB_OUTPUT
+          echo "PREVIEW_VERSION=${version_name}-r${commit_count}"
+          echo "PREVIEW_VERSION=${version_name}-r${commit_count}" >> $GITHUB_OUTPUT
 
       - name: Commit logs
         id: commit_logs
         run: |
           echo "COMMIT_LOGS<<{delimiter}
           $(curl -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/thealtersky/komikku/compare/${{ steps.previous_commit.outputs.PREV_RELEASE_SHA }}...${{ steps.current_commit.outputs.CURRENT_SHA }}" \
+            "https://api.github.com/repos/thealtersky/komikku/compare/${{ steps.previous_commit.outputs.PREV_RELEASE_SHA }}...${{ steps.read_env.outputs.CURRENT_SHA }}" \
             | jq '[.commits[]|{message:(.commit.message | split("\n")), username:.author.login}]' \
             | jq -r '.[]|"- \(.message | first) (@\(.username))"')
           {delimiter}" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        if: ${{ github.ref }} == "refs/heads/main"
+        run: |
+          git tag "${{ steps.env.outputs.TAG_NAME }}"
+          git push origin "${{ steps.env.outputs.TAG_NAME }}"
+          echo "New tag created: ${{ steps.env.outputs.TAG_NAME }}"
 
   build-app:
     runs-on: 'ubuntu-24.04'
     needs: prepare-build
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Clone Repository (${{ needs.prepare-build.outputs.VERSION_TAG }} - ${{ needs.prepare-build.outputs.TAG_NAME }})
+      - name: Clone Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
@@ -144,7 +134,10 @@ jobs:
       - name: Check code format
         run: ./gradlew spotlessCheck
 
-      - name: Build app
+      - name: Build stable app
+        run: ./gradlew assembleRelease -Penable-updater
+
+      - name: Build preview app
         run: ./gradlew assemblePreview -Penable-updater
 
       - name: Run unit tests
@@ -155,6 +148,12 @@ jobs:
         with:
           path: "**/*.apk"
           retention-days: 1
+
+      - name: Upload stable mapping
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mapping-${{ github.sha }}
+          path: app/build/outputs/mapping/release
 
   release-app:
     runs-on: 'ubuntu-24.04'
@@ -167,7 +166,18 @@ jobs:
         with:
           merge-multiple: true
 
-      - name: Sign APK
+      - name: Sign stable APK
+        uses: r0adkll/sign-android-release@f30bdd30588842ac76044ecdbd4b6d0e3e813478
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: '35.0.1'
+
+      - name: Sign preview APK
         uses: r0adkll/sign-android-release@f30bdd30588842ac76044ecdbd4b6d0e3e813478
         with:
           releaseDirectory: app/build/outputs/apk/preview
@@ -178,24 +188,39 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: '35.0.1'
 
-      - name: Get SHA & clean up build artifacts
-        id: get_sha
+      - name: Rename stable APKs
         run: |
           set -e
+          V="${{ needs.prepare-build.outputs.STABLE_VERSION }}"
+          mv app/build/outputs/apk/release/app-universal-release-unsigned-signed.apk Komikku-$V.apk
+          mv app/build/outputs/apk/release/app-arm64-v8a-release-unsigned-signed.apk Komikku-arm64-v8a-$V.apk
+          mv app/build/outputs/apk/release/app-armeabi-v7a-release-unsigned-signed.apk Komikku-armeabi-v7a-$V.apk
+          mv app/build/outputs/apk/release/app-x86-release-unsigned-signed.apk Komikku-x86-$V.apk
+          mv app/build/outputs/apk/release/app-x86_64-release-unsigned-signed.apk Komikku-x86_64-$V.apk
 
-          mv app/build/outputs/apk/${{ needs.prepare-build.outputs.ARTIFACTS_PREFIX }}-universal-preview-signed.apk Komikku-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-          mv app/build/outputs/apk/${{ needs.prepare-build.outputs.ARTIFACTS_PREFIX }}-arm64-v8a-preview-signed.apk Komikku-arm64-v8a-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-          mv app/build/outputs/apk/${{ needs.prepare-build.outputs.ARTIFACTS_PREFIX }}-armeabi-v7a-preview-signed.apk Komikku-armeabi-v7a-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-          mv app/build/outputs/apk/${{ needs.prepare-build.outputs.ARTIFACTS_PREFIX }}-x86-preview-signed.apk Komikku-x86-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-          mv app/build/outputs/apk/${{ needs.prepare-build.outputs.ARTIFACTS_PREFIX }}-x86_64-preview-signed.apk Komikku-x86_64-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
+      - name: Rename preview APKs
+        run: |
+          set -e
+          V="${{ needs.prepare-build.outputs.PREVIEW_VERSION }}"
+          mv app/build/outputs/apk/preview/app-universal-preview-signed.apk Komikku-Preview-$V.apk
+          mv app/build/outputs/apk/preview/app-arm64-v8a-preview-signed.apk Komikku-arm64-v8a-Preview-$V.apk
+          mv app/build/outputs/apk/preview/app-armeabi-v7a-preview-signed.apk Komikku-armeabi-v7a-Preview-$V.apk
+          mv app/build/outputs/apk/preview/app-x86-preview-signed.apk Komikku-x86-Preview-$V.apk
+          mv app/build/outputs/apk/preview/app-x86_64-preview-signed.apk Komikku-x86_64-Preview-$V.apk
 
       - name: Create release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ needs.prepare-build.outputs.TAG_NAME }}
-          name: Komikku Preview ${{ needs.prepare-build.outputs.TAG_NAME }} (${{ needs.prepare-build.outputs.VERSION_TAG }})
+          name: Komikku ${{ needs.prepare-build.outputs.STABLE_VERSION }} (Preview ${{ needs.prepare-build.outputs.PREVIEW_VERSION }})
           body: |
             [![GitHub downloads](https://img.shields.io/github/downloads/thealtersky/komikku/${{ needs.prepare-build.outputs.TAG_NAME }}/total?label=Downloaded&labelColor=27303D&color=0D1117&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/thealtersky/komikku/releases/${{ needs.prepare-build.outputs.TAG_NAME }})
+            #### Stable `${{ needs.prepare-build.outputs.STABLE_VERSION }}`
+            Files prefixed `Komikku-` (appId `app.komikku`): `Komikku-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk` for the universal build.
+
+            #### Preview `${{ needs.prepare-build.outputs.PREVIEW_VERSION }}`
+            Files prefixed `Komikku-Preview-` (appId `app.komikku.beta`): `Komikku-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk` for the universal build.
+
             #### What's Changed
             ##### New
 
@@ -206,17 +231,17 @@ jobs:
             ${{ needs.prepare-build.outputs.COMMIT_LOGS }}
 
             **Full Changelog**: [thealtersky/komikku@${{ needs.prepare-build.outputs.PREV_TAG_NAME }}...${{ needs.prepare-build.outputs.TAG_NAME }}](https://github.com/thealtersky/komikku/compare/${{ needs.prepare-build.outputs.PREV_TAG_NAME }}...${{ needs.prepare-build.outputs.TAG_NAME }})
-
-            <!-->
-            > [!TIP]
-            >
-            > ### If you are unsure which version to download then go with `Komikku-${{ needs.prepare-build.outputs.TAG_NAME }}.apk`
           files: |
-            Komikku-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-            Komikku-arm64-v8a-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-            Komikku-armeabi-v7a-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-            Komikku-x86-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
-            Komikku-x86_64-${{ needs.prepare-build.outputs.TAG_NAME }}.apk
+            Komikku-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
+            Komikku-arm64-v8a-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
+            Komikku-armeabi-v7a-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
+            Komikku-x86-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
+            Komikku-x86_64-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
+            Komikku-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
+            Komikku-arm64-v8a-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
+            Komikku-armeabi-v7a-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
+            Komikku-x86-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
+            Komikku-x86_64-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}

@@ -23,7 +23,11 @@ class ReleaseServiceImpl(
                 .parseAs<GithubRelease>()
         }
 
-        val downloadLink = getDownloadLink(release = release, isFoss = arguments.isFoss) ?: return null
+        val downloadLink = getDownloadLink(
+            release = release,
+            isFoss = arguments.isFoss,
+            isPreview = arguments.isPreview,
+        ) ?: return null
 
         return Release(
             version = release.version,
@@ -43,7 +47,11 @@ class ReleaseServiceImpl(
                 .awaitSuccess()
                 .parseAs<List<GithubRelease>>()
                 .mapNotNull { release ->
-                    val downloadLink = getDownloadLink(release = release, isFoss = arguments.isFoss) ?: return@mapNotNull null
+                    val downloadLink = getDownloadLink(
+                        release = release,
+                        isFoss = arguments.isFoss,
+                        isPreview = arguments.isPreview,
+                    ) ?: return@mapNotNull null
 
                     Release(
                         version = release.version,
@@ -73,8 +81,16 @@ class ReleaseServiceImpl(
     }
     // KMK <--
 
-    private fun getDownloadLink(release: GithubRelease, isFoss: Boolean): String? {
-        val map = release.assets.associate { asset ->
+    // KMK -->
+    private fun getDownloadLink(release: GithubRelease, isFoss: Boolean, isPreview: Boolean): String? {
+        // A single release contains both stable ("Komikku-...", no "preview") and preview
+        // ("Komikku-Preview-..., contains "preview") assets, so pick only the current channel's.
+        val channelAssets = release.assets.filter { asset ->
+            val isPreviewAsset = asset.name.contains("preview", ignoreCase = true)
+            if (isPreview) isPreviewAsset else !isPreviewAsset
+        }
+
+        val map = channelAssets.associate { asset ->
             BUILD_TYPES.find { "-$it" in asset.name } to asset.downloadLink
         }
 
@@ -84,6 +100,7 @@ class ReleaseServiceImpl(
             map[FOSS]
         }
     }
+    // KMK <--
 
     companion object {
         private const val FOSS = "foss"

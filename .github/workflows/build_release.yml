@@ -1,10 +1,10 @@
 name: Release Builder
-# Build a stable release on a tag v* newly pushed
+# Disabled from auto-trigger: building both APKs and publishing one combined
+# release is now handled by the "Build & Release" workflow on push to main.
+# Kept here as a manual option to build only the stable release.
 
 on:
-  push:
-    tags:
-      - v*
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
