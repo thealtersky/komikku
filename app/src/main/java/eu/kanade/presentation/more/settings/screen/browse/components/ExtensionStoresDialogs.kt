@@ -103,7 +103,7 @@ fun ExtensionStoreCreateDialog(
             TextButton(
                 onClick = {
                     onTokenSet(token.text)
-                    onCreate(state.text)
+                    onCreate(state.text.toString())
                 },
                 enabled = !processing && state.text.isNotEmpty() && !storeAlreadyExists,
             ) {
