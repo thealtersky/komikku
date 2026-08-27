@@ -83,10 +83,10 @@ class ReleaseServiceImpl(
 
     // KMK -->
     private fun getDownloadLink(release: GithubRelease, isFoss: Boolean, isPreview: Boolean): String? {
-        // A single release contains both stable ("Komikku-...", no "preview") and preview
-        // ("Komikku-Preview-..., contains "preview") assets, so pick only the current channel's.
+        // A single release contains both stable ("Komikku-1.14.1.apk") and preview
+        // ("Komikku-r7.apk") assets, so pick only the current channel's by filename pattern.
         val channelAssets = release.assets.filter { asset ->
-            val isPreviewAsset = asset.name.contains("preview", ignoreCase = true)
+            val isPreviewAsset = previewAssetRegex.matches(asset.name)
             if (isPreview) isPreviewAsset else !isPreviewAsset
         }
 
@@ -105,6 +105,12 @@ class ReleaseServiceImpl(
     companion object {
         private const val FOSS = "foss"
         private val BUILD_TYPES = listOf(FOSS, "arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+
+        // KMK -->
+        // Preview assets are suffixed with a commit count, e.g. "Komikku-r7.apk" or
+        // "Komikku-arm64-v8a-r7.apk". Stable assets end with a semver like "1.14.1".
+        private val previewAssetRegex = Regex("""-r\d+\.apk${'$'}""", RegexOption.IGNORE_CASE)
+        // KMK <--
 
         /**
          * Regular expression that matches a mention to a valid GitHub username, like it's

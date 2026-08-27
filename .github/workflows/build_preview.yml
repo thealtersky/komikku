@@ -26,7 +26,7 @@ jobs:
       COMMIT_COUNT: ${{ steps.read_env.outputs.COMMIT_COUNT }}
       TAG_NAME: ${{ steps.env.outputs.TAG_NAME }}
       STABLE_VERSION: ${{ steps.env.outputs.STABLE_VERSION }}
-      PREVIEW_VERSION: ${{ steps.env.outputs.PREVIEW_VERSION }}
+      PREVIEW_TAG: ${{ steps.env.outputs.PREVIEW_TAG }}
       COMMIT_LOGS: ${{ steps.commit_logs.outputs.COMMIT_LOGS }}
       PREV_TAG_NAME: ${{ steps.previous_commit.outputs.PREV_TAG_NAME }}
     steps:
@@ -79,8 +79,8 @@ jobs:
           echo "TAG_NAME=v${version_name}-r${commit_count}" >> $GITHUB_OUTPUT
           echo "STABLE_VERSION=${version_name}"
           echo "STABLE_VERSION=${version_name}" >> $GITHUB_OUTPUT
-          echo "PREVIEW_VERSION=${version_name}-r${commit_count}"
-          echo "PREVIEW_VERSION=${version_name}-r${commit_count}" >> $GITHUB_OUTPUT
+          echo "PREVIEW_TAG=r${commit_count}"
+          echo "PREVIEW_TAG=r${commit_count}" >> $GITHUB_OUTPUT
 
       - name: Commit logs
         id: commit_logs
@@ -201,25 +201,25 @@ jobs:
       - name: Rename preview APKs
         run: |
           set -e
-          V="${{ needs.prepare-build.outputs.PREVIEW_VERSION }}"
-          mv app/build/outputs/apk/preview/app-universal-preview-signed.apk Komikku-Preview-$V.apk
-          mv app/build/outputs/apk/preview/app-arm64-v8a-preview-signed.apk Komikku-arm64-v8a-Preview-$V.apk
-          mv app/build/outputs/apk/preview/app-armeabi-v7a-preview-signed.apk Komikku-armeabi-v7a-Preview-$V.apk
-          mv app/build/outputs/apk/preview/app-x86-preview-signed.apk Komikku-x86-Preview-$V.apk
-          mv app/build/outputs/apk/preview/app-x86_64-preview-signed.apk Komikku-x86_64-Preview-$V.apk
+          V="${{ needs.prepare-build.outputs.PREVIEW_TAG }}"
+          mv app/build/outputs/apk/preview/app-universal-preview-signed.apk Komikku-$V.apk
+          mv app/build/outputs/apk/preview/app-arm64-v8a-preview-signed.apk Komikku-arm64-v8a-$V.apk
+          mv app/build/outputs/apk/preview/app-armeabi-v7a-preview-signed.apk Komikku-armeabi-v7a-$V.apk
+          mv app/build/outputs/apk/preview/app-x86-preview-signed.apk Komikku-x86-$V.apk
+          mv app/build/outputs/apk/preview/app-x86_64-preview-signed.apk Komikku-x86_64-$V.apk
 
       - name: Create release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
           tag_name: ${{ needs.prepare-build.outputs.TAG_NAME }}
-          name: Komikku ${{ needs.prepare-build.outputs.STABLE_VERSION }} (Preview ${{ needs.prepare-build.outputs.PREVIEW_VERSION }})
+          name: Komikku ${{ needs.prepare-build.outputs.STABLE_VERSION }} (Preview ${{ needs.prepare-build.outputs.PREVIEW_TAG }})
           body: |
             [![GitHub downloads](https://img.shields.io/github/downloads/thealtersky/komikku/${{ needs.prepare-build.outputs.TAG_NAME }}/total?label=Downloaded&labelColor=27303D&color=0D1117&logo=github&logoColor=FFFFFF&style=flat)](https://github.com/thealtersky/komikku/releases/${{ needs.prepare-build.outputs.TAG_NAME }})
             #### Stable `${{ needs.prepare-build.outputs.STABLE_VERSION }}`
             Files prefixed `Komikku-` (appId `app.komikku`): `Komikku-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk` for the universal build.
 
-            #### Preview `${{ needs.prepare-build.outputs.PREVIEW_VERSION }}`
-            Files prefixed `Komikku-Preview-` (appId `app.komikku.beta`): `Komikku-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk` for the universal build.
+            #### Preview `${{ needs.prepare-build.outputs.PREVIEW_TAG }}`
+            Preview (beta) builds use commit-count tags (`appId app.komikku.beta`): `Komikku-${{ needs.prepare-build.outputs.PREVIEW_TAG }}.apk` for the universal build.
 
             #### What's Changed
             ##### New
@@ -237,11 +237,11 @@ jobs:
             Komikku-armeabi-v7a-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
             Komikku-x86-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
             Komikku-x86_64-${{ needs.prepare-build.outputs.STABLE_VERSION }}.apk
-            Komikku-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
-            Komikku-arm64-v8a-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
-            Komikku-armeabi-v7a-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
-            Komikku-x86-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
-            Komikku-x86_64-Preview-${{ needs.prepare-build.outputs.PREVIEW_VERSION }}.apk
+            Komikku-${{ needs.prepare-build.outputs.PREVIEW_TAG }}.apk
+            Komikku-arm64-v8a-${{ needs.prepare-build.outputs.PREVIEW_TAG }}.apk
+            Komikku-armeabi-v7a-${{ needs.prepare-build.outputs.PREVIEW_TAG }}.apk
+            Komikku-x86-${{ needs.prepare-build.outputs.PREVIEW_TAG }}.apk
+            Komikku-x86_64-${{ needs.prepare-build.outputs.PREVIEW_TAG }}.apk
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
