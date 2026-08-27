@@ -301,6 +301,27 @@ class ExtensionManager(
         return installer.downloadAndInstall(extension.apkUrl, extension)
     }
 
+    // KMK -->
+    /**
+     * Install the extension that provides the given source id, if it is available from the
+     * configured extension stores. The download and install runs through [installExtension],
+     * so it honors the user's configured installer method (Legacy / PackageInstaller /
+     * Shizuku / Private). Returns the package name when an extension was found and the install
+     * was triggered, or null when none of the stores list a matching extension.
+     */
+    suspend fun installMissingSourceApk(sourceId: Long): String? {
+        // Refresh the available list so recently restored stores are taken into account.
+        findAvailableExtensions()
+
+        val available = availableExtensionMapFlow.value.values
+            .find { extension -> extension.sources.any { it.id == sourceId } }
+            ?: return null
+
+        installExtension(available)
+        return available.pkgName
+    }
+    // KMK <--
+
     /**
      * Returns a flow of the installation process for the given extension. It will complete
      * once the extension is updated or throws an error. The process will be canceled if

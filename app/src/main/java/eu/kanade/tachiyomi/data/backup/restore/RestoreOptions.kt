@@ -14,6 +14,9 @@ data class RestoreOptions(
     // SY -->
     val savedSearchesFeeds: Boolean = true,
     // SY <--
+    // KMK -->
+    val installMissingSources: Boolean = false,
+    // KMK <--
 ) {
 
     fun asBooleanArray() = booleanArrayOf(
@@ -25,6 +28,9 @@ data class RestoreOptions(
         // SY -->
         savedSearchesFeeds,
         // SY <--
+        // KMK -->
+        installMissingSources,
+        // KMK <--
     )
 
     fun canRestore() =
@@ -71,6 +77,13 @@ data class RestoreOptions(
                 setter = { options, enabled -> options.copy(savedSearchesFeeds = enabled) },
             ),
             // SY <--
+            // KMK -->
+            Entry(
+                label = KMR.strings.backup_install_missing_sources,
+                getter = RestoreOptions::installMissingSources,
+                setter = { options, enabled -> options.copy(installMissingSources = enabled) },
+            ),
+            // KMK <--
         )
 
         fun fromBooleanArray(array: BooleanArray) = RestoreOptions(
@@ -81,7 +94,10 @@ data class RestoreOptions(
             sourceSettings = array[4],
             // SY -->
             savedSearchesFeeds = array[5],
-            // SY <--
+            // SY <-->
+            // KMK -->
+            installMissingSources = array.getOrNull(6) ?: false,
+            // KMK <--
         )
     }
 

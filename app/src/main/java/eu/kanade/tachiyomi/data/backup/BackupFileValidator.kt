@@ -40,6 +40,13 @@ class BackupFileValidator(
             .distinct()
             .sorted()
 
+        // KMK -->
+        val missingSourceIds = sources
+            .filter { sourceManager.get(it.key) == null }
+            .keys
+            .toList()
+        // KMK <--
+
         val trackers = backup.backupManga
             .flatMap { it.tracking }
             .map { it.syncId }
@@ -50,11 +57,20 @@ class BackupFileValidator(
             .map { it.name }
             .sorted()
 
-        return Results(missingSources, missingTrackers)
+        return Results(
+            missingSources,
+            missingTrackers,
+            // KMK -->
+            missingSourceIds,
+            // KMK <--
+        )
     }
 
     data class Results(
         val missingSources: List<String>,
         val missingTrackers: List<String>,
+        // KMK -->
+        val missingSourceIds: List<Long> = emptyList(),
+        // KMK <--
     )
 }
