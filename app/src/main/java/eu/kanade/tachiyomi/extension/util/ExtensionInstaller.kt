@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.extension.installer.Installer
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.network.NetworkHelper
+import eu.kanade.tachiyomi.network.ProgressListener
 import eu.kanade.tachiyomi.util.storage.getUriCompat
 import eu.kanade.tachiyomi.util.system.isPackageInstalled
 import kotlinx.coroutines.CoroutineScope
@@ -21,8 +22,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import logcat.LogPriority
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -45,7 +44,9 @@ internal class ExtensionInstaller(
     // KMK <--
     private val extensionInstaller = Injekt.get<BasePreferences>().extensionInstaller()
 
-    private val httpClient: OkHttpClient = Injekt.get<NetworkHelper>().client
+    // KMK -->
+    private val networkHelper: NetworkHelper = Injekt.get<NetworkHelper>()
+    // KMK <--
 
     /**
      * Adds the given extension to the downloads queue and returns an observable containing its
@@ -69,23 +70,22 @@ internal class ExtensionInstaller(
             val tmpFile = File(context.cacheDir, "extension_$pkgName.apk")
             try {
                 step.value = InstallStep.Downloading
-                val request = Request.Builder().url(url).build()
-                httpClient.newCall(request).execute()
-                    // KMK -->
-                    .use { response ->
-                        // KMK <--
-
-                        if (!response.isSuccessful) {
-                            throw Exception("Failed to download extension")
-                        }
-                        // KMK -->
-                        tmpFile.outputStream().use { output ->
-                            response.body.byteStream().use { input ->
-                                // KMK <--
-                                input.copyTo(output)
+                // KMK -->
+                // Use the network helper's resume-capable downloader, which runs on the extended
+                // timeout client (bypasses the default 30s read timeout that truncates large APKs)
+                // and carries the GitHub private-store token via the shared interceptor.
+                networkHelper.downloadFileWithResume(
+                    url = url,
+                    outputFile = tmpFile,
+                    progressListener = object : ProgressListener {
+                        override fun update(bytesRead: Long, contentLength: Long, done: Boolean) {
+                            if (done) {
+                                step.value = InstallStep.Installing
                             }
                         }
-                    }
+                    },
+                )
+                // KMK <--
 
                 step.value = InstallStep.Installing
                 installApk(downloadId, tmpFile)

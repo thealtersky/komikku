@@ -31,27 +31,23 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import eu.kanade.tachiyomi.network.NetworkPreferences
 import kotlinx.coroutines.delay
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
 import tachiyomi.presentation.core.i18n.stringResource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun ExtensionStoreCreateDialog(
     onDismissRequest: () -> Unit,
     onCreate: (String) -> Unit,
-    onTokenSet: (String) -> Unit,
+    onTokenSet: (String, String) -> Unit,
     storeIndexUrls: Set<String>,
     processing: Boolean,
     errorMessage: String?,
 ) {
     val state = rememberTextFieldState()
-    val initialToken = remember { Injekt.get<NetworkPreferences>().extensionStoreToken().get() }
-    var token by remember { mutableStateOf(TextFieldValue(initialToken)) }
+    var token by remember { mutableStateOf(TextFieldValue("")) }
     var hideToken by remember { mutableStateOf(true) }
     val storeAlreadyExists by remember(storeIndexUrls, state) {
         derivedStateOf {
@@ -102,7 +98,7 @@ fun ExtensionStoreCreateDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onTokenSet(token.text)
+                    onTokenSet(state.text.toString(), token.text)
                     onCreate(state.text.toString())
                 },
                 enabled = !processing && state.text.isNotEmpty() && !storeAlreadyExists,
@@ -206,15 +202,14 @@ fun ExtensionStoreDeleteDialog(
 fun ExtensionStoreConfirmDialog(
     onDismissRequest: () -> Unit,
     onCreate: () -> Unit,
-    onTokenSet: (String) -> Unit,
+    onTokenSet: (String, String) -> Unit,
     storeIndexUrl: String,
     storeAlreadyExists: Boolean,
     processing: Boolean,
     errorMessage: String?,
 ) {
     val state = rememberTextFieldState(initialText = storeIndexUrl)
-    val initialToken = remember { Injekt.get<NetworkPreferences>().extensionStoreToken().get() }
-    var token by remember { mutableStateOf(TextFieldValue(initialToken)) }
+    var token by remember { mutableStateOf(TextFieldValue("")) }
     var hideToken by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismissRequest,
@@ -256,7 +251,7 @@ fun ExtensionStoreConfirmDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onTokenSet(token.text)
+                    onTokenSet(storeIndexUrl, token.text)
                     onCreate()
                 },
                 enabled = !storeAlreadyExists && !processing,

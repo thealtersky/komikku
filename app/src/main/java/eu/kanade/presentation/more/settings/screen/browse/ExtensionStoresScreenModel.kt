@@ -15,6 +15,7 @@ import mihon.domain.extension.interactor.GetExtensionStores
 import mihon.domain.extension.interactor.RemoveExtensionStore
 import mihon.domain.extension.interactor.UpdateExtensionStores
 import mihon.domain.extension.model.ExtensionStore
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import tachiyomi.core.common.util.lang.launchIO
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -170,11 +171,36 @@ class ExtensionStoresScreenModel(
     }
 
     /**
-     * Stores the GitHub token used to access private extension repositories.
+     * Stores the GitHub token for a given store, keyed by the store's GitHub "owner/repo".
+     * A blank token removes the stored token for that repo. The token is kept separate per repo,
+     * so adding one private store never leaks/overwrites another store's token.
      */
-    fun onSetToken(token: String) {
+    fun onSetToken(storeIndexUrl: String, token: String) {
+        val repoKey = extractGitHubOwnerRepo(storeIndexUrl) ?: return
+        val tokens = networkPreferences.extensionStoreTokens().get().toMutableSet()
+        tokens.removeAll { it.startsWith("$repoKey=") }
         val cleanToken = token.trim()
-        networkPreferences.extensionStoreToken().set(cleanToken)
+        if (cleanToken.isNotEmpty()) {
+            tokens += "$repoKey=$cleanToken"
+        }
+        networkPreferences.extensionStoreTokens().set(tokens)
+    }
+
+    /**
+     * Derives the GitHub "owner/repo" (e.g. "thealtersky/extensions") from a store index URL.
+     * Recognizes github.com and raw.githubusercontent.com URLs.
+     */
+    private fun extractGitHubOwnerRepo(storeIndexUrl: String): String? {
+        return runCatching {
+            val url = storeIndexUrl.toHttpUrl()
+            val host = url.host
+            val segments = url.pathSegments
+            when (host) {
+                "github.com" -> if (segments.size >= 2) "${segments[0]}/${segments[1]}" else null
+                "raw.githubusercontent.com" -> if (segments.size >= 2) "${segments[0]}/${segments[1]}" else null
+                else -> null
+            }
+        }.getOrNull()
     }
     // KMK <--
 

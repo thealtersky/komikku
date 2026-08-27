@@ -61,7 +61,12 @@ import kotlin.random.Random
             .addInterceptor(UncaughtExceptionInterceptor())
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
             // KMK -->
-            .addInterceptor(GitHubAuthInterceptor { preferences.extensionStoreToken().get() })
+            .addInterceptor(
+                GitHubAuthInterceptor { ownerKey ->
+                    // Prefer the per-repo token, falling back to the single legacy token.
+                    preferences.resolveStoreToken(ownerKey)
+                },
+            )
         // KMK <--
 
         // KMK -->
