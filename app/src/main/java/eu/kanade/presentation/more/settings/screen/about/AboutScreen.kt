@@ -346,7 +346,11 @@ class AboutScreen : Screen() {
                             onAvailableUpdate(result)
                         }
 
-                        else -> {}
+                        else -> {
+                            // KMK -->
+                            context.toast(MR.strings.update_check_no_new_updates)
+                            // KMK <--
+                        }
                     }
                 } catch (e: Exception) {
                     context.toast(e.message)

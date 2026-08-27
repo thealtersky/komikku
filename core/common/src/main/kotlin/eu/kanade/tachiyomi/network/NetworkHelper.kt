@@ -153,6 +153,10 @@ import kotlin.random.Random
         var downloadedBytes: Long
 
         var attempt = 0
+        // KMK -->
+        var lastError: Throwable? = null
+        var lastStatusCode: Int? = null
+        // KMK <--
 
         while (attempt < MAX_RETRY) {
             try {
@@ -174,6 +178,9 @@ import kotlin.random.Random
                             return
                         }
                     } else {
+                        // KMK -->
+                        lastStatusCode = response.code
+                        // KMK <--
                         attempt++
                         logcat(LogPriority.ERROR) { "Unexpected response code: ${response.code}. Retrying..." }
                         if (response.code == 416) {
@@ -185,13 +192,29 @@ import kotlin.random.Random
                 }
                 if (failed) exponentialBackoff(attempt - 1)
             } catch (e: IOException) {
+                // KMK -->
+                lastError = e
+                // KMK <--
                 logcat(LogPriority.ERROR) { "Download interrupted: ${e.message}. Retrying..." }
                 // Wait or handle as needed before retrying
                 attempt++
                 exponentialBackoff(attempt - 1)
             }
         }
-        throw IOException("Max retry attempts reached.")
+        // KMK -->
+        val statusCode = lastStatusCode
+        val lastException = lastError
+        val detail = when {
+            statusCode != null -> {
+                "HTTP $statusCode"
+            }
+            lastException != null -> {
+                "${lastException.javaClass.simpleName}: ${lastException.message}"
+            }
+            else -> "unknown error"
+        }
+        throw IOException("Download failed after $MAX_RETRY attempts ($url) — $detail")
+        // KMK <--
     }
 
     // Helper function to save data incrementally

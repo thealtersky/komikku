@@ -103,7 +103,9 @@ val RELEASE_TAG: String by lazy { getReleaseTag() }
 
 fun getReleaseTag(peekIntoPreview: Boolean = false): String =
     if (isPreviewBuildType || peekIntoPreview) {
-        "r${BuildConfig.COMMIT_COUNT}"
+        // Preview releases are tagged "v<versionName>-r<commitCount>" in the same repo,
+        // so the displayed/permalink tag must match exactly.
+        "v${BuildConfig.VERSION_NAME}-r${BuildConfig.COMMIT_COUNT}"
     } else {
         "v${BuildConfig.VERSION_NAME}"
     }
