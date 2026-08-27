@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.serialization.json.Json
+import okhttp3.CacheControl
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.model.Release
 import tachiyomi.domain.release.service.ReleaseService
@@ -18,7 +19,7 @@ class ReleaseServiceImpl(
     override suspend fun latest(arguments: GetApplicationRelease.Arguments): Release? {
         val release = with(json) {
             networkService.client
-                .newCall(GET("https://api.github.com/repos/${arguments.repository}/releases/latest"))
+                .newCall(GET("https://api.github.com/repos/${arguments.repository}/releases/latest", cache = NO_CACHE))
                 .awaitSuccess()
                 .parseAs<GithubRelease>()
         }
@@ -43,7 +44,7 @@ class ReleaseServiceImpl(
     override suspend fun releaseNotes(arguments: GetApplicationRelease.Arguments): List<Release> {
         return with(json) {
             networkService.client
-                .newCall(GET("https://api.github.com/repos/${arguments.repository}/releases"))
+                .newCall(GET("https://api.github.com/repos/${arguments.repository}/releases", cache = NO_CACHE))
                 .awaitSuccess()
                 .parseAs<List<GithubRelease>>()
                 .mapNotNull { release ->
@@ -105,6 +106,16 @@ class ReleaseServiceImpl(
     companion object {
         private const val FOSS = "foss"
         private val BUILD_TYPES = listOf(FOSS, "arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+
+        // KMK -->
+        /**
+         * Never serve update-check responses from the OkHttp cache, so that a newly released
+         * version is always picked up instead of a stale cached release list.
+         */
+        private val NO_CACHE = CacheControl.Builder()
+            .noStore()
+            .build()
+        // KMK <--
 
         // KMK -->
         // Preview assets are suffixed with a commit count, e.g. "Komikku-r7.apk" or
