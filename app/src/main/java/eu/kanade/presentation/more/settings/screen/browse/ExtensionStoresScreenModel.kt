@@ -52,7 +52,6 @@ class ExtensionStoresScreenModel(
                                 stores = stores,
                                 // KMK -->
                                 disabledRepos = sourcePreferences.disabledRepos().get(),
-                                githubTokenSet = networkPreferences.extensionStoreToken().get().isNotEmpty(),
                                 // KMK <--
                             )
                             is ExtensionStoreScreenState.Success -> it.copy(stores = stores)
@@ -176,17 +175,6 @@ class ExtensionStoresScreenModel(
     fun onSetToken(token: String) {
         val cleanToken = token.trim()
         networkPreferences.extensionStoreToken().set(cleanToken)
-        updateSuccessState { state -> state.copy(githubTokenSet = cleanToken.isNotEmpty()) }
-        dismissDialog()
-    }
-
-    /**
-     * Clears the GitHub token used to access private extension repositories.
-     */
-    fun onClearToken() {
-        networkPreferences.extensionStoreToken().set("")
-        updateSuccessState { state -> state.copy(githubTokenSet = false) }
-        dismissDialog()
     }
     // KMK <--
 
@@ -223,9 +211,6 @@ sealed class ExtensionStoreDialog {
         val processing: Boolean = false,
         val errorMessage: String? = null,
     ) : ExtensionStoreDialog()
-    // KMK -->
-    data object SetToken : ExtensionStoreDialog()
-    // KMK <--
 }
 
 sealed class ExtensionStoreScreenState {
@@ -239,7 +224,6 @@ sealed class ExtensionStoreScreenState {
         val dialog: ExtensionStoreDialog? = null,
         // KMK -->
         val disabledRepos: Set<String> = emptySet(),
-        val githubTokenSet: Boolean = false,
         // KMK <--
     ) : ExtensionStoreScreenState() {
 

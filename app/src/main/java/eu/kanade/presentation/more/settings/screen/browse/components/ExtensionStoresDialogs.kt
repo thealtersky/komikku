@@ -2,7 +2,6 @@ package eu.kanade.presentation.more.settings.screen.browse.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -45,12 +44,16 @@ import kotlin.time.Duration.Companion.seconds
 fun ExtensionStoreCreateDialog(
     onDismissRequest: () -> Unit,
     onCreate: (String) -> Unit,
+    onTokenSet: (String) -> Unit,
     storeIndexUrls: Set<String>,
     processing: Boolean,
     errorMessage: String?,
 ) {
     val state = rememberTextFieldState()
-    val storeAlreadyExists by remember(storeIndexUrls) {
+    val initialToken = remember { Injekt.get<NetworkPreferences>().extensionStoreToken().get() }
+    var token by remember { mutableStateOf(TextFieldValue(initialToken)) }
+    var hideToken by remember { mutableStateOf(true) }
+    val storeAlreadyExists by remember(storeIndexUrls, state) {
         derivedStateOf {
             val indexUrl = state.text.toString()
             storeIndexUrls.contains(indexUrl)
@@ -65,30 +68,43 @@ fun ExtensionStoreCreateDialog(
             Text(text = stringResource(MR.strings.extensionStoresScreen_addStore_title))
         },
         text = {
-            OutlinedTextField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
-                state = state,
-                label = {
-                    Text(text = stringResource(MR.strings.extensionStoresScreen_addStoreInput_inputLabel))
-                },
-                supportingText = {
-                    val msgRes = if (storeAlreadyExists) {
-                        MR.strings.extensionStoresScreen_addStore_alreadyExists
-                    } else {
-                        MR.strings.information_required_plain
-                    }
-                    Text(text = errorMessage ?: stringResource(msgRes))
-                },
-                isError = errorMessage != null || storeAlreadyExists,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                lineLimits = TextFieldLineLimits.SingleLine,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
+                    state = state,
+                    label = {
+                        Text(text = stringResource(MR.strings.extensionStoresScreen_addStoreInput_inputLabel))
+                    },
+                    supportingText = {
+                        val msgRes = if (storeAlreadyExists) {
+                            MR.strings.extensionStoresScreen_addStore_alreadyExists
+                        } else {
+                            MR.strings.information_required_plain
+                        }
+                        Text(text = errorMessage ?: stringResource(msgRes))
+                    },
+                    isError = errorMessage != null || storeAlreadyExists,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    lineLimits = TextFieldLineLimits.SingleLine,
+                )
+                // KMK -->
+                GitHubTokenField(
+                    token = token,
+                    onTokenChange = { token = it },
+                    hideToken = hideToken,
+                    onToggleHide = { hideToken = !hideToken },
+                )
+                // KMK <--
+            }
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(state.text.toString()) },
+                onClick = {
+                    onTokenSet(token.text)
+                    onCreate(state.text)
+                },
                 enabled = !processing && state.text.isNotEmpty() && !storeAlreadyExists,
             ) {
                 Text(
@@ -115,6 +131,43 @@ fun ExtensionStoreCreateDialog(
         focusRequester.requestFocus()
     }
 }
+
+// KMK -->
+@Composable
+private fun GitHubTokenField(
+    token: TextFieldValue,
+    onTokenChange: (TextFieldValue) -> Unit,
+    hideToken: Boolean,
+    onToggleHide: () -> Unit,
+) {
+    OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = token,
+        onValueChange = onTokenChange,
+        label = {
+            Text(text = stringResource(KMR.strings.extension_stores_github_token_input_optional))
+        },
+        trailingIcon = {
+            IconButton(onClick = onToggleHide) {
+                Icon(
+                    imageVector = if (hideToken) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                    contentDescription = null,
+                )
+            }
+        },
+        visualTransformation = if (hideToken) {
+            PasswordVisualTransformation()
+        } else {
+            VisualTransformation.None
+        },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
+        ),
+        singleLine = true,
+    )
+}
+// KMK <--
 
 @Composable
 fun ExtensionStoreDeleteDialog(
@@ -147,99 +200,29 @@ fun ExtensionStoreDeleteDialog(
     )
 }
 
-// KMK -->
-@Composable
-fun ExtensionStoreTokenDialog(
-    onDismissRequest: () -> Unit,
-    onSave: (String) -> Unit,
-    onClear: () -> Unit,
-) {
-    val networkPreferences = remember { Injekt.get<NetworkPreferences>() }
-    val initialToken = remember { networkPreferences.extensionStoreToken().get() }
-    var token by remember { mutableStateOf(TextFieldValue(initialToken)) }
-    var hideToken by remember { mutableStateOf(true) }
-
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = {
-            Text(text = stringResource(KMR.strings.extension_stores_github_token))
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = stringResource(KMR.strings.extension_stores_github_token_dialog_summary))
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = token,
-                    onValueChange = { token = it },
-                    label = {
-                        Text(text = stringResource(KMR.strings.extension_stores_github_token_input))
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { hideToken = !hideToken }) {
-                            Icon(
-                                imageVector = if (hideToken) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    visualTransformation = if (hideToken) {
-                        PasswordVisualTransformation()
-                    } else {
-                        VisualTransformation.None
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done,
-                    ),
-                    singleLine = true,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSave(token.text.toString()) },
-                enabled = token.text.isNotEmpty(),
-            ) {
-                Text(text = stringResource(MR.strings.action_save))
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(
-                    onClick = {
-                        onClear()
-                        onDismissRequest()
-                    },
-                    enabled = initialToken.isNotEmpty(),
-                ) {
-                    Text(text = stringResource(KMR.strings.extension_stores_github_token_clear))
-                }
-                TextButton(onClick = onDismissRequest) {
-                    Text(text = stringResource(MR.strings.action_cancel))
-                }
-            }
-        },
-    )
-}
 // KMK <--
 
 @Composable
 fun ExtensionStoreConfirmDialog(
     onDismissRequest: () -> Unit,
     onCreate: () -> Unit,
+    onTokenSet: (String) -> Unit,
     storeIndexUrl: String,
     storeAlreadyExists: Boolean,
     processing: Boolean,
     errorMessage: String?,
 ) {
     val state = rememberTextFieldState(initialText = storeIndexUrl)
+    val initialToken = remember { Injekt.get<NetworkPreferences>().extensionStoreToken().get() }
+    var token by remember { mutableStateOf(TextFieldValue(initialToken)) }
+    var hideToken by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
             Text(text = stringResource(MR.strings.extensionStoresScreen_addStore_title))
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = stringResource(MR.strings.extensionStoresScreen_addStoreDeeplink_bodyText))
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),
@@ -260,10 +243,24 @@ fun ExtensionStoreConfirmDialog(
                     },
                     isError = errorMessage != null || storeAlreadyExists,
                 )
+                // KMK -->
+                GitHubTokenField(
+                    token = token,
+                    onTokenChange = { token = it },
+                    hideToken = hideToken,
+                    onToggleHide = { hideToken = !hideToken },
+                )
+                // KMK <--
             }
         },
         confirmButton = {
-            TextButton(onClick = onCreate, enabled = !storeAlreadyExists && !processing) {
+            TextButton(
+                onClick = {
+                    onTokenSet(token.text)
+                    onCreate()
+                },
+                enabled = !storeAlreadyExists && !processing,
+            ) {
                 Text(
                     text = stringResource(
                         resource = if (processing) {

@@ -104,12 +104,7 @@
     <string name="extensions_page_need_refresh">Refresh extension page to update list.</string>
     <string name="extensions_page_more">More extensions...</string>
     <!-- GitHub token for private extension repositories -->
-    <string name="extension_stores_github_token">GitHub token</string>
-    <string name="extension_stores_github_token_dialog_summary">Set a GitHub personal access token (PAT) to access private extension repositories. It is stored locally and sent only to GitHub hosts.</string>
-    <string name="extension_stores_github_token_input">Personal access token</string>
-    <string name="extension_stores_github_token_clear">Clear</string>
-    <string name="extension_stores_github_token_state_set">Token set</string>
-    <string name="extension_stores_github_token_state_not_set">No token set</string>
+    <string name="extension_stores_github_token_input_optional">GitHub token (optional)</string>
     <!-- Extension repos -->
       <!-- Downloads section -->
     <string name="download_cache_renew_interval">Download cache renew interval</string>
