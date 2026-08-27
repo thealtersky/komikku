@@ -18,14 +18,18 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.SavedSearchRestorer
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.kmk.KMR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,7 +50,53 @@ class BackupRestorer(
     // KMK -->
     private val feedRestorer: FeedRestorer = FeedRestorer(),
     // KMK <--
+    // KMK -->
+    private val extensionManager: ExtensionManager = Injekt.get(),
+    private val sourceManager: SourceManager = Injekt.get(),
+    // KMK <--
 ) {
+
+    // KMK -->
+    /**
+     * Installs the extensions that provide the sources present in the backup but missing on the
+     * device. Runs only when [RestoreOptions.installMissingSources] is enabled. Uses the same
+     * [ExtensionManager.installExtension] pipeline, so it honors whichever installer method the
+     * user has configured (Legacy / PackageInstaller / Shizuku / Private).
+     *
+     * @param backupSources Mapping of source id to source name from the backup.
+     */
+    private suspend fun installMissingSources(backupSources: Map<Long, String>) {
+        val missingSourceIds = backupSources.keys
+            .filter { sourceManager.get(it) == null }
+
+        if (missingSourceIds.isEmpty()) {
+            // No missing sources, nothing to do.
+            return
+        }
+
+        missingSourceIds.forEach { sourceId ->
+            try {
+                extensionManager.installMissingSourceApk(sourceId)
+            } catch (e: Exception) {
+                val sourceName = sourceMapping[sourceId] ?: sourceId.toString()
+                errors.add(Date() to "Failed to install missing source: $sourceName : ${e.message}")
+            }
+        }
+
+        restoreProgress += 1
+        with(notifier) {
+            showRestoreProgress(
+                context.stringResource(KMR.strings.backup_install_missing_sources),
+                restoreProgress,
+                restoreAmount,
+                isSync,
+            )
+                // KMK -->
+                .show(Notifications.ID_RESTORE_PROGRESS)
+            // KMK <--
+        }
+    }
+    // KMK <--
 
     private var restoreAmount = 0
     private var restoreProgress = 0
@@ -102,6 +152,11 @@ class BackupRestorer(
         if (options.sourceSettings) {
             restoreAmount += 1
         }
+        // KMK -->
+        if (options.installMissingSources) {
+            restoreAmount += 1
+        }
+        // KMK <--
 
         coroutineScope {
             if (options.categories) {
@@ -132,6 +187,16 @@ class BackupRestorer(
 
             // TODO: optionally trigger online library + tracker update
         }
+
+        // KMK -->
+        // Install missing sources after extension stores have been restored, so that the
+        // configured stores are available when locating the matching extension.
+        if (options.installMissingSources) {
+            installMissingSources(
+                backup.backupSources.associate { it.sourceId to it.name },
+            )
+        }
+        // KMK <--
     }
 
     context(scope: CoroutineScope)
