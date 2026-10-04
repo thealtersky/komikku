@@ -65,6 +65,7 @@ import eu.kanade.tachiyomi.util.CrashLogUtil
 import eu.kanade.tachiyomi.util.storage.DiskUtil
 import eu.kanade.tachiyomi.util.system.GLUtil
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
+import eu.kanade.tachiyomi.util.system.isPreviewBuildType
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import eu.kanade.tachiyomi.util.system.isShizukuInstalled
 import eu.kanade.tachiyomi.util.system.powerManager
@@ -350,7 +351,19 @@ object SettingsAdvancedScreen : SearchableSettings {
                         context.toast(MR.strings.requires_app_restart)
                     },
                 ),
-            ),
+            ).builder().apply {
+                // KMK -->
+                if (isPreviewBuildType) {
+                    add(
+                        Preference.PreferenceItem.SwitchPreference(
+                            preference = networkPreferences.bypassCloudflare(),
+                            title = stringResource(KMR.strings.pref_bypass_cloudflare),
+                            subtitle = stringResource(KMR.strings.pref_bypass_cloudflare_summary),
+                        ),
+                    )
+                }
+                // KMK <--
+            }.build(),
         )
     }
 

@@ -45,14 +45,19 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.WarningBanner
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.network.NetworkPreferences
+import eu.kanade.tachiyomi.util.system.WebViewUtil
 import eu.kanade.tachiyomi.util.system.getHtml
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
+import eu.kanade.tachiyomi.util.system.isPreviewBuildType
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class WebViewWindow(webContent: WebContent, val navigator: WebViewNavigator) {
     var state by mutableStateOf(WebViewState(webContent))
@@ -96,6 +101,12 @@ fun WebViewScreenContent(
     var currentUrl by remember { mutableStateOf(url) }
     var showCloudflareHelp by remember { mutableStateOf(false) }
 
+    // KMK -->
+    val bypassCloudflare = remember {
+        isPreviewBuildType && Injekt.get<NetworkPreferences>().bypassCloudflare().get()
+    }
+    // KMK <--
+
     val webClient = remember {
         object : AccompanistWebViewClient() {
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -131,6 +142,21 @@ fun WebViewScreenContent(
                 request: WebResourceRequest?,
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
+
+                // KMK -->
+                // Bypass Cloudflare: let the challenge flow navigate natively instead of
+                // forcing a reload with extra headers, which re-triggers the challenge
+                // and causes a loop.
+                if (
+                    bypassCloudflare && (
+                        url.contains("challenges.cloudflare.com") ||
+                            url.contains("/cdn-cgi/challenge-platform") ||
+                            url.contains("__cf_chl")
+                        )
+                ) {
+                    return false
+                }
+                // KMK <--
 
                 // Ignore intents urls
                 if (url.startsWith("intent://")) return true
@@ -302,6 +328,15 @@ fun WebViewScreenContent(
                     ) {
                         WebView.setWebContentsDebuggingEnabled(true)
                     }
+
+                    // KMK -->
+                    // Bypass Cloudflare: use a browser-like user agent instead of the
+                    // WebView default (which advertises itself as a WebView and makes
+                    // Cloudflare re-issue the challenge in a loop).
+                    if (bypassCloudflare && headers["user-agent"] == null) {
+                        webView.settings.userAgentString = WebViewUtil.getInferredUserAgent(webView.context)
+                    }
+                    // KMK <--
 
                     headers["user-agent"]?.let {
                         webView.settings.userAgentString = it
